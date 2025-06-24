@@ -3,14 +3,15 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/godbus/dbus"
-	"github.com/mame82/mblue-toolz/bt_uuid"
-	"github.com/mame82/mblue-toolz/btmgmt"
-	"github.com/mame82/mblue-toolz/toolz"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/godbus/dbus"
+	"github.com/mame82/mblue-toolz/bt_uuid"
+	"github.com/mame82/mblue-toolz/btmgmt"
+	"github.com/mame82/mblue-toolz/toolz"
 )
 
 /*
@@ -172,16 +173,20 @@ func SetSSPForAllController(SSPEnabled bool) (err error) {
 	fmt.Printf("Set Secure Simple Pairing for all controllers to: %v\n", SSPEnabled)
 
 	// Try to open a connection to mgmt socket
-	Mgmt,err := btmgmt.NewBtMgmt()
-	if err != nil { return errors.New(fmt.Sprintf("Connecting to Bluetooth Management failed: %v", err))}
+	Mgmt, err := btmgmt.NewBtMgmt()
+	if err != nil {
+		return errors.New(fmt.Sprintf("Connecting to Bluetooth Management failed: %v", err))
+	}
 
 	// try to fetch ControllerIndexList
-	cl,err := Mgmt.ReadControllerIndexList()
-	if err != nil { return errors.New(fmt.Sprintf("Fetching controller index list failed: %v", err))}
+	cl, err := Mgmt.ReadControllerIndexList()
+	if err != nil {
+		return errors.New(fmt.Sprintf("Fetching controller index list failed: %v", err))
+	}
 
-	for _,ctlIdx := range cl.Indices {
+	for _, ctlIdx := range cl.Indices {
 		// Try to retrieve controller info and print
-		if ctlInfo,err := Mgmt.ReadControllerInformation(ctlIdx); err == nil {
+		if ctlInfo, err := Mgmt.ReadControllerInformation(ctlIdx); err == nil {
 			fmt.Printf("\nController info for controller: %d\n", ctlIdx)
 			fmt.Println("====================================")
 			fmt.Println(ctlInfo)
@@ -198,7 +203,7 @@ func SetSSPForAllController(SSPEnabled bool) (err error) {
 				fmt.Println("...SSP already disabled")
 			default:
 				fmt.Println("... Power off controller")
-				_,err = Mgmt.SetPowered(ctlIdx, false)
+				_, err = Mgmt.SetPowered(ctlIdx, false)
 				if err != nil {
 					fmt.Println(failureSkip)
 					break
@@ -208,21 +213,19 @@ func SetSSPForAllController(SSPEnabled bool) (err error) {
 				} else {
 					fmt.Println("... disabling SSP")
 				}
-				_,err = Mgmt.SetSecureSimplePairing(ctlIdx, SSPEnabled)
+				_, err = Mgmt.SetSecureSimplePairing(ctlIdx, SSPEnabled)
 				if err != nil {
 					fmt.Println(failureSkip)
 					break
 				}
 				fmt.Println("... Power on controller")
-				currentSettings,err := Mgmt.SetPowered(ctlIdx, true)
+				currentSettings, err := Mgmt.SetPowered(ctlIdx, true)
 				if err != nil {
 					fmt.Println(failureSkip)
 					break
 				}
 				fmt.Printf("SSP Enabled: %v\n", currentSettings.SecureSimplePairing)
 			}
-
-
 
 		} else {
 			fmt.Printf("Error retrieving controller info for controller %d: %v\n", ctlIdx, err)
@@ -242,7 +245,7 @@ func WaitForSig() {
 
 // ------------ START OF AGENT IMPLEMENTATION ------------
 // implements toolz.Agent1Interface
-type DemoAgent struct {}
+type DemoAgent struct{}
 
 func (DemoAgent) RegistrationPath() string {
 	return toolz.AgentDefaultRegisterPath
@@ -293,9 +296,8 @@ func (DemoAgent) RequestConfirmation(device dbus.ObjectPath, passkey uint32) *db
 	// cap == AGENT_CAP_DISPLAY_YES_NO
 	fmt.Printf("DemoAgent request confirmation called for passkey: %d\n", passkey)
 
-	time.Sleep(time.Second * 5)
-	fmt.Println("... rejecting passkey")
-	return toolz.ErrRejected
+	time.Sleep(time.Second)
+	return nil
 }
 
 func (DemoAgent) RequestAuthorization(device dbus.ObjectPath) *dbus.Error {
@@ -321,19 +323,20 @@ func (DemoAgent) Cancel() *dbus.Error {
 	fmt.Println("DemoAgent cancel called")
 	return nil
 }
+
 // ------------ END OF AGENT IMPLEMENTATION ------------
-
-
-
 
 func main() {
 	AdapterName := "hci0" //Assume the controller used by DBus is called "hci0" change if needed
-	useSSP := true // if true, the demo tries to enable SSP, otherwise to disable (influence on pairing agent behavior)
+	useSSP := true        // if true, the demo tries to enable SSP, otherwise to disable (influence on pairing agent behavior)
 	//agentCap := toolz.AGENT_CAP_DISPLAY_YES_NO
-	agentCap := toolz.AGENT_CAP_NO_INPUT_NO_OUTPUT //<-- "just works" connection, no manual passcode interaction, no callbacks to agent
+	// agentCap := toolz.AGENT_CAP_NO_INPUT_NO_OUTPUT //<-- "just works" connection, no manual passcode interaction, no callbacks to agent
+	agentCap := toolz.AGENT_CAP_DISPLAY_ONLY
 
-	hci0_adapter,err := toolz.Adapter(toolz.AdapterNameToDBusPath(AdapterName))
-	if err != nil { panic(fmt.Sprintf("Couldn't open adapter '%s'", AdapterName)) }
+	hci0_adapter, err := toolz.Adapter(toolz.AdapterNameToDBusPath(AdapterName))
+	if err != nil {
+		panic(fmt.Sprintf("Couldn't open adapter '%s'", AdapterName))
+	}
 
 	// Try to set new alias, don't account for error results
 	hci0_adapter.SetPowered(false)
@@ -345,20 +348,29 @@ func main() {
 	// to console, but rejects the device)
 	SetSSPForAllController(useSSP) // this is done via "Bluetooth Control Socket", not DBus
 
-
 	fmt.Printf("Set '%s' discoverable and pairable, without timeout...\n", AdapterName)
 	// power on adapter
 	err = hci0_adapter.SetPowered(true)
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	// set discoverable and pairable, both without timeout
 	err = hci0_adapter.SetDiscoverableTimeout(0)
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	err = hci0_adapter.SetPairableTimeout(0)
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	err = hci0_adapter.SetDiscoverable(true)
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 	err = hci0_adapter.SetPairable(true)
-	if err != nil { panic(err) }
+	if err != nil {
+		panic(err)
+	}
 
 	// register the Agent implemented above to DBus and set it as DefaultAgent for Bluez
 	// Note: Agent behavior depends on
